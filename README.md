@@ -32,8 +32,10 @@ All shortcuts/keymaps can be found [in the documentation on the website](https:/
 [Troubleshooting](https://github.com/helix-editor/helix/wiki/Troubleshooting)
 
 # Added Features 
-- + Live global fuzzy search (https://github.com/helix-editor/helix/pull/11700 @useche)
+- + Live global fuzzy search (by [@useche](https://github.com/helix-editor/helix/pull/11700)(8/3/24))
+- + Harpoon like bookmarks in file (by [@savente93](https://github.com/helix-editor/helix/pull/10905/files)(8/3/24))
 
+---
 
 # Features
 
