@@ -5,6 +5,7 @@
   <source media="(prefers-color-scheme: dark)" srcset="logo_dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="logo_light.svg">
   <img alt="Helix" height="128" src="logo_light.svg">
+  <h3><b>Extended</b></h3>
 </picture>
 </h1>
 
@@ -29,6 +30,12 @@ For more information, see the [website](https://helix-editor.com) or
 All shortcuts/keymaps can be found [in the documentation on the website](https://docs.helix-editor.com/keymap.html).
 
 [Troubleshooting](https://github.com/helix-editor/helix/wiki/Troubleshooting)
+
+# Added Features 
+- + Live global fuzzy search (by [@useche](https://github.com/helix-editor/helix/pull/11700)(8/3/24))
+- + Harpoon like bookmarks in file (by [@savente93](https://github.com/helix-editor/helix/pull/10905/files)(8/3/24))
+
+---
 
 # Features
 
