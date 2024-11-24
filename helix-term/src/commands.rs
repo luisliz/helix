@@ -7,7 +7,7 @@ use futures_util::FutureExt;
 use helix_event::status;
 use helix_parsec::{seq, take_until, Parser};
 use helix_stdx::{
-    path::expand_tilde,
+    path::{self, find_paths},
     rope::{self, RopeSliceExt},
 };
 use helix_vcs::{FileChange, Hunk};
@@ -23,8 +23,8 @@ use helix_core::{
     encoding, find_workspace,
     graphemes::{self, next_grapheme_boundary, RevRopeGraphemes},
     history::UndoKind,
-    increment, indent,
-    indent::IndentStyle,
+    increment,
+    indent::{self, IndentStyle},
     line_ending::{get_line_ending_of_str, line_end_char_index},
     match_brackets,
     movement::{self, move_vertically_visual, Direction},
@@ -1275,53 +1275,31 @@ fn goto_file_impl(cx: &mut Context, action: Action) {
         .unwrap_or_default();
 
     let paths: Vec<_> = if selections.len() == 1 && primary.len() == 1 {
-        // Secial case: if there is only one one-width selection, try to detect the
-        // path under the cursor.
-        let is_valid_path_char = |c: &char| {
-            #[cfg(target_os = "windows")]
-            let valid_chars = &[
-                '@', '/', '\\', '.', '-', '_', '+', '#', '$', '%', '{', '}', '[', ']', ':', '!',
-                '~', '=',
-            ];
-            #[cfg(not(target_os = "windows"))]
-            let valid_chars = &['@', '/', '.', '-', '_', '+', '#', '$', '%', '~', '=', ':'];
-
-            valid_chars.contains(c) || c.is_alphabetic() || c.is_numeric()
-        };
-
-        let cursor_pos = primary.cursor(text.slice(..));
-        let pre_cursor_pos = cursor_pos.saturating_sub(1);
-        let post_cursor_pos = cursor_pos + 1;
-        let start_pos = if is_valid_path_char(&text.char(cursor_pos)) {
-            cursor_pos
-        } else if is_valid_path_char(&text.char(pre_cursor_pos)) {
-            pre_cursor_pos
-        } else {
-            post_cursor_pos
-        };
-
-        let prefix_len = text
-            .chars_at(start_pos)
-            .reversed()
-            .take_while(is_valid_path_char)
-            .count();
-
-        let postfix_len = text
-            .chars_at(start_pos)
-            .take_while(is_valid_path_char)
-            .count();
-
-        let path: String = text
-            .slice((start_pos - prefix_len)..(start_pos + postfix_len))
-            .into();
-        log::debug!("goto_file auto-detected path: {}", path);
-
-        vec![path]
+        let mut pos = primary.cursor(text.slice(..));
+        pos = text.char_to_byte(pos);
+        let search_start = text
+            .line_to_byte(text.byte_to_line(pos))
+            .max(pos.saturating_sub(1000));
+        let search_end = text
+            .line_to_byte(text.byte_to_line(pos) + 1)
+            .min(pos + 1000);
+        let search_range = text.slice(search_start..search_end);
+        // we also allow paths that are next to the cursor (can be ambigous but
+        // rarely so in practice) so that gf on quoted/braced path works (not sure about this
+        // but apparently that is how gf has worked historically in helix)
+        let path = find_paths(search_range, true)
+            .inspect(|mat| println!("{mat:?} {:?}", pos - search_start))
+            .take_while(|range| search_start + range.start <= pos + 1)
+            .find(|range| pos <= search_start + range.end)
+            .map(|range| Cow::from(search_range.byte_slice(range)));
+        log::debug!("goto_file auto-detected path: {path:?}");
+        let path = path.unwrap_or_else(|| primary.fragment(text.slice(..)));
+        vec![path.into_owned()]
     } else {
         // Otherwise use each selection, trimmed.
         selections
             .fragments(text.slice(..))
-            .map(|sel| sel.trim().to_string())
+            .map(|sel| sel.trim().to_owned())
             .filter(|sel| !sel.is_empty())
             .collect()
     };
@@ -1332,7 +1310,7 @@ fn goto_file_impl(cx: &mut Context, action: Action) {
             continue;
         }
 
-        let path = expand_tilde(Cow::from(PathBuf::from(sel)));
+        let path = path::expand(&sel);
         let path = &rel_path.join(path);
         if path.is_dir() {
             let picker = ui::file_picker(path.into(), &cx.editor.config());
@@ -2773,7 +2751,9 @@ fn delete_selection_impl(cx: &mut Context, op: Operation, yank: YankAction) {
         // yank the selection
         let text = doc.text().slice(..);
         let values: Vec<String> = selection.fragments(text).map(Cow::into_owned).collect();
-        let reg_name = cx.register.unwrap_or('"');
+        let reg_name = cx
+            .register
+            .unwrap_or_else(|| cx.editor.config.load().default_yank_register);
         if let Err(err) = cx.editor.registers.write(reg_name, values) {
             cx.editor.set_error(err.to_string());
             return;
@@ -3505,31 +3485,51 @@ fn open(cx: &mut Context, open: Open) {
             )
         };
 
-        let indent = indent::indent_for_newline(
-            doc.language_config(),
-            doc.syntax(),
-            &doc.config.load().indent_heuristic,
-            &doc.indent_style,
-            doc.tab_width(),
-            text,
-            line_num,
-            line_end_index,
-            cursor_line,
-        );
+        let continue_comment_token = doc
+            .language_config()
+            .and_then(|config| config.comment_tokens.as_ref())
+            .and_then(|tokens| comment::get_comment_token(text, tokens, cursor_line));
+
+        let line = text.line(cursor_line);
+        let indent = match line.first_non_whitespace_char() {
+            Some(pos) if continue_comment_token.is_some() => line.slice(..pos).to_string(),
+            _ => indent::indent_for_newline(
+                doc.language_config(),
+                doc.syntax(),
+                &doc.config.load().indent_heuristic,
+                &doc.indent_style,
+                doc.tab_width(),
+                text,
+                line_num,
+                line_end_index,
+                cursor_line,
+            ),
+        };
 
         let indent_len = indent.len();
         let mut text = String::with_capacity(1 + indent_len);
         text.push_str(doc.line_ending.as_str());
         text.push_str(&indent);
+
+        if let Some(token) = continue_comment_token {
+            text.push_str(token);
+            text.push(' ');
+        }
+
         let text = text.repeat(count);
 
         // calculate new selection ranges
         let pos = offs + line_end_index + line_end_offset_width;
+        let comment_len = continue_comment_token
+            .map(|token| token.len() + 1) // `+ 1` for the extra space added
+            .unwrap_or_default();
         for i in 0..count {
             // pos                    -> beginning of reference line,
-            // + (i * (1+indent_len)) -> beginning of i'th line from pos
-            // + indent_len ->        -> indent for i'th line
-            ranges.push(Range::point(pos + (i * (1 + indent_len)) + indent_len));
+            // + (i * (1+indent_len + comment_len)) -> beginning of i'th line from pos (possibly including comment token)
+            // + indent_len + comment_len ->        -> indent for i'th line
+            ranges.push(Range::point(
+                pos + (i * (1 + indent_len + comment_len)) + indent_len + comment_len,
+            ));
         }
 
         offs += text.chars().count();
@@ -3967,6 +3967,11 @@ pub mod insert {
 
             let mut new_text = String::new();
 
+            let continue_comment_token = doc
+                .language_config()
+                .and_then(|config| config.comment_tokens.as_ref())
+                .and_then(|tokens| comment::get_comment_token(text, tokens, current_line));
+
             // If the current line is all whitespace, insert a line ending at the beginning of
             // the current line. This makes the current line empty and the new line contain the
             // indentation of the old line.
@@ -3976,17 +3981,22 @@ pub mod insert {
 
                 (line_start, line_start, new_text.chars().count())
             } else {
-                let indent = indent::indent_for_newline(
-                    doc.language_config(),
-                    doc.syntax(),
-                    &doc.config.load().indent_heuristic,
-                    &doc.indent_style,
-                    doc.tab_width(),
-                    text,
-                    current_line,
-                    pos,
-                    current_line,
-                );
+                let line = text.line(current_line);
+
+                let indent = match line.first_non_whitespace_char() {
+                    Some(pos) if continue_comment_token.is_some() => line.slice(..pos).to_string(),
+                    _ => indent::indent_for_newline(
+                        doc.language_config(),
+                        doc.syntax(),
+                        &doc.config.load().indent_heuristic,
+                        &doc.indent_style,
+                        doc.tab_width(),
+                        text,
+                        current_line,
+                        pos,
+                        current_line,
+                    ),
+                };
 
                 // If we are between pairs (such as brackets), we want to
                 // insert an additional line which is indented one level
@@ -3996,19 +4006,30 @@ pub mod insert {
                     .and_then(|pairs| pairs.get(prev))
                     .map_or(false, |pair| pair.open == prev && pair.close == curr);
 
-                let local_offs = if on_auto_pair {
+                let local_offs = if let Some(token) = continue_comment_token {
+                    new_text.push_str(doc.line_ending.as_str());
+                    new_text.push_str(&indent);
+                    new_text.push_str(token);
+                    new_text.push(' ');
+                    new_text.chars().count()
+                } else if on_auto_pair {
+                    // line where the cursor will be
                     let inner_indent = indent.clone() + doc.indent_style.as_str();
                     new_text.reserve_exact(2 + indent.len() + inner_indent.len());
                     new_text.push_str(doc.line_ending.as_str());
                     new_text.push_str(&inner_indent);
+
+                    // line where the matching pair will be
                     let local_offs = new_text.chars().count();
                     new_text.push_str(doc.line_ending.as_str());
                     new_text.push_str(&indent);
+
                     local_offs
                 } else {
                     new_text.reserve_exact(1 + indent.len());
                     new_text.push_str(doc.line_ending.as_str());
                     new_text.push_str(&indent);
+
                     new_text.chars().count()
                 };
 
@@ -4218,7 +4239,11 @@ fn commit_undo_checkpoint(cx: &mut Context) {
 // Yank / Paste
 
 fn yank(cx: &mut Context) {
-    yank_impl(cx.editor, cx.register.unwrap_or('"'));
+    yank_impl(
+        cx.editor,
+        cx.register
+            .unwrap_or(cx.editor.config().default_yank_register),
+    );
     exit_select_mode(cx);
 }
 
@@ -4279,7 +4304,12 @@ fn yank_joined_impl(editor: &mut Editor, separator: &str, register: char) {
 
 fn yank_joined(cx: &mut Context) {
     let separator = doc!(cx.editor).line_ending.as_str();
-    yank_joined_impl(cx.editor, separator, cx.register.unwrap_or('"'));
+    yank_joined_impl(
+        cx.editor,
+        separator,
+        cx.register
+            .unwrap_or(cx.editor.config().default_yank_register),
+    );
     exit_select_mode(cx);
 }
 
@@ -4334,6 +4364,10 @@ fn paste_impl(
 ) {
     if values.is_empty() {
         return;
+    }
+
+    if mode == Mode::Insert {
+        doc.append_changes_to_history(view);
     }
 
     let repeat = std::iter::repeat(
@@ -4435,7 +4469,12 @@ fn paste_primary_clipboard_before(cx: &mut Context) {
 }
 
 fn replace_with_yanked(cx: &mut Context) {
-    replace_with_yanked_impl(cx.editor, cx.register.unwrap_or('"'), cx.count());
+    replace_with_yanked_impl(
+        cx.editor,
+        cx.register
+            .unwrap_or(cx.editor.config().default_yank_register),
+        cx.count(),
+    );
     exit_select_mode(cx);
 }
 
@@ -4498,7 +4537,8 @@ fn paste(editor: &mut Editor, register: char, pos: Paste, count: usize) {
 fn paste_after(cx: &mut Context) {
     paste(
         cx.editor,
-        cx.register.unwrap_or('"'),
+        cx.register
+            .unwrap_or(cx.editor.config().default_yank_register),
         Paste::After,
         cx.count(),
     );
@@ -4508,7 +4548,8 @@ fn paste_after(cx: &mut Context) {
 fn paste_before(cx: &mut Context) {
     paste(
         cx.editor,
-        cx.register.unwrap_or('"'),
+        cx.register
+            .unwrap_or(cx.editor.config().default_yank_register),
         Paste::Before,
         cx.count(),
     );
@@ -5362,7 +5403,8 @@ fn insert_register(cx: &mut Context) {
             cx.register = Some(ch);
             paste(
                 cx.editor,
-                cx.register.unwrap_or('"'),
+                cx.register
+                    .unwrap_or(cx.editor.config().default_yank_register),
                 Paste::Cursor,
                 cx.count(),
             );

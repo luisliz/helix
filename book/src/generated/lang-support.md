@@ -3,6 +3,7 @@
 | ada | ✓ | ✓ |  | `ada_language_server` |
 | adl | ✓ | ✓ | ✓ |  |
 | agda | ✓ |  |  |  |
+| amber | ✓ |  |  |  |
 | astro | ✓ |  |  |  |
 | awk | ✓ | ✓ |  | `awk-language-server` |
 | bash | ✓ | ✓ | ✓ | `bash-language-server` |
@@ -29,6 +30,7 @@
 | crystal | ✓ | ✓ |  | `crystalline` |
 | css | ✓ |  | ✓ | `vscode-css-language-server` |
 | cue | ✓ |  |  | `cuelsp` |
+| cylc | ✓ | ✓ | ✓ |  |
 | d | ✓ | ✓ | ✓ | `serve-d` |
 | dart | ✓ | ✓ | ✓ | `dart` |
 | dbml | ✓ |  |  |  |
@@ -39,6 +41,7 @@
 | dockerfile | ✓ | ✓ |  | `docker-langserver` |
 | dot | ✓ |  |  | `dot-language-server` |
 | dtd | ✓ |  |  |  |
+| dune | ✓ |  |  |  |
 | earthfile | ✓ | ✓ | ✓ | `earthlyls` |
 | edoc | ✓ |  |  |  |
 | eex | ✓ |  |  |  |
@@ -68,7 +71,7 @@
 | gjs | ✓ | ✓ | ✓ | `typescript-language-server`, `vscode-eslint-language-server`, `ember-language-server` |
 | gleam | ✓ | ✓ |  | `gleam` |
 | glimmer | ✓ |  |  | `ember-language-server` |
-| glsl | ✓ | ✓ | ✓ |  |
+| glsl | ✓ | ✓ | ✓ | `glsl_analyzer` |
 | gn | ✓ |  |  |  |
 | go | ✓ | ✓ | ✓ | `gopls`, `golangci-lint-langserver` |
 | godot-resource | ✓ | ✓ |  |  |
@@ -89,7 +92,7 @@
 | hosts | ✓ |  |  |  |
 | html | ✓ |  |  | `vscode-html-language-server`, `superhtml` |
 | hurl | ✓ | ✓ | ✓ |  |
-| hyprlang | ✓ |  | ✓ |  |
+| hyprlang | ✓ |  | ✓ | `hyprls` |
 | idris |  |  |  | `idris2-lsp` |
 | iex | ✓ |  |  |  |
 | ini | ✓ |  |  |  |
@@ -134,6 +137,7 @@
 | move | ✓ |  |  |  |
 | msbuild | ✓ |  | ✓ |  |
 | nasm | ✓ | ✓ |  |  |
+| nestedtext | ✓ | ✓ | ✓ |  |
 | nickel | ✓ |  | ✓ | `nls` |
 | nim | ✓ | ✓ | ✓ | `nimlangserver` |
 | nix | ✓ | ✓ |  | `nil`, `nixd` |
@@ -166,6 +170,7 @@
 | purescript | ✓ | ✓ |  | `purescript-language-server` |
 | python | ✓ | ✓ | ✓ | `ruff`, `jedi-language-server`, `pylsp` |
 | qml | ✓ |  | ✓ | `qmlls` |
+| quint | ✓ |  |  | `quint-language-server` |
 | r | ✓ |  |  | `R` |
 | racket | ✓ |  | ✓ | `racket` |
 | regex | ✓ |  |  |  |
@@ -185,7 +190,9 @@
 | smali | ✓ |  | ✓ |  |
 | smithy | ✓ |  |  | `cs` |
 | sml | ✓ |  |  |  |
+| snakemake | ✓ |  | ✓ | `pylsp` |
 | solidity | ✓ | ✓ |  | `solc` |
+| spade | ✓ |  | ✓ | `spade-language-server` |
 | spicedb | ✓ |  |  |  |
 | sql | ✓ | ✓ |  |  |
 | sshclientconfig | ✓ |  |  |  |
@@ -201,6 +208,7 @@
 | task | ✓ |  |  |  |
 | tcl | ✓ |  | ✓ |  |
 | templ | ✓ |  |  | `templ` |
+| textproto | ✓ | ✓ | ✓ |  |
 | tfvars | ✓ |  | ✓ | `terraform-ls` |
 | thrift | ✓ |  |  |  |
 | todotxt | ✓ |  |  |  |
@@ -212,7 +220,7 @@
 | typespec | ✓ | ✓ | ✓ | `tsp-server` |
 | typst | ✓ |  |  | `tinymist`, `typst-lsp` |
 | ungrammar | ✓ |  |  |  |
-| unison | ✓ |  | ✓ |  |
+| unison | ✓ | ✓ | ✓ |  |
 | uxntal | ✓ |  |  |  |
 | v | ✓ | ✓ | ✓ | `v-analyzer` |
 | vala | ✓ | ✓ |  | `vala-language-server` |
